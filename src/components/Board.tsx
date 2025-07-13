@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import Column from "./Column";
 import type { Task, ColumnType } from "../types";
+import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 
 // Initial columns and tasks
 const initialColumns: ColumnType[] = [
@@ -37,6 +38,7 @@ const initialTasks: { [id: string]: Task } = {
 export default function Board() {
   const [columns, setColumns] = useState<ColumnType[]>(initialColumns);
   const [tasks, setTasks] = useState<{ [id: string]: Task }>(initialTasks);
+  const [newColumnTitle, setNewColumnTitle] = useState("");
 
   // Add Task
   function handleAddTask(title: string, description: string) {
@@ -86,21 +88,122 @@ export default function Board() {
     );
   }
 
+  // Add Column
+  function handleAddColumn(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newColumnTitle.trim()) return;
+    const newId = Date.now().toString();
+    setColumns(prev => [
+      ...prev,
+      { id: newId, title: newColumnTitle.trim(), taskIds: [] }
+    ]);
+    setNewColumnTitle("");
+  }
+
+  // Delete Column
+  function handleDeleteColumn(id: string) {
+    // Remove all tasks in this column
+    const col = columns.find(c => c.id === id);
+    if (col) {
+      setTasks(prev => {
+        const updated = { ...prev };
+        col.taskIds.forEach(tid => delete updated[tid]);
+        return updated;
+      });
+    }
+    // Remove the column
+    setColumns(prev => prev.filter(c => c.id !== id));
+  }
+
+  // Drag and Drop Handler
+  function onDragEnd(result: DropResult) {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    setColumns(prevColumns => {
+      const sourceColIdx = prevColumns.findIndex(col => col.id === source.droppableId);
+      const destColIdx = prevColumns.findIndex(col => col.id === destination.droppableId);
+      if (sourceColIdx === -1 || destColIdx === -1) return prevColumns;
+
+      const sourceCol = prevColumns[sourceColIdx];
+      const destCol = prevColumns[destColIdx];
+
+      // Remove from source
+      const newSourceTaskIds = Array.from(sourceCol.taskIds);
+      newSourceTaskIds.splice(source.index, 1);
+
+      // Add to destination
+      const newDestTaskIds = Array.from(destCol.taskIds);
+      newDestTaskIds.splice(destination.index, 0, draggableId);
+
+      const newColumns = [...prevColumns];
+      newColumns[sourceColIdx] = { ...sourceCol, taskIds: newSourceTaskIds };
+      newColumns[destColIdx] = { ...destCol, taskIds: newDestTaskIds };
+
+      // Update task status if moved between columns
+      if (sourceCol.id !== destCol.id) {
+        setTasks(prevTasks => ({
+          ...prevTasks,
+          [draggableId]: {
+            ...prevTasks[draggableId],
+            status: destCol.id,
+          },
+        }));
+      }
+
+      return newColumns;
+    });
+  }
+
   return (
-    <div className="flex gap-4 p-4 min-h-screen bg-gray-100 dark:bg-gray-900">
-      {columns.map(col => (
-        <Column
-          key={col.id}
-          id={col.id}
-          title={col.title}
-          tasks={col.taskIds
-            .map(taskId => tasks[taskId])
-            .filter((task): task is Task => Boolean(task))}
-          onAddTask={col.id === "todo" ? handleAddTask : undefined}
-          onEditTask={handleEditTask}
-          onDeleteTask={handleDeleteTask}
+    <div>
+      <form onSubmit={handleAddColumn} className="flex gap-2 mb-4 p-4">
+        <input
+          type="text"
+          value={newColumnTitle}
+          onChange={e => setNewColumnTitle(e.target.value)}
+          placeholder="New column title"
+          className="p-2 border rounded"
+          required
         />
-      ))}
+        <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded">
+          Add Column
+        </button>
+      </form>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="flex gap-4 p-4 min-h-screen bg-gray-100 dark:bg-gray-900">
+          {columns.map(col => (
+            <Droppable droppableId={col.id} key={col.id}>
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className="flex-shrink-0"
+                >
+                  <Column
+                    id={col.id}
+                    title={col.title}
+                    tasks={col.taskIds
+                      .map(taskId => tasks[taskId])
+                      .filter((task): task is Task => Boolean(task))}
+                    onAddTask={col.id === "todo" ? handleAddTask : undefined}
+                    onEditTask={handleEditTask}
+                    onDeleteTask={handleDeleteTask}
+                    onDeleteColumn={columns.length > 1 ? handleDeleteColumn : undefined}
+                  />
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          ))}
+        </div>
+      </DragDropContext>
     </div>
   );
 }

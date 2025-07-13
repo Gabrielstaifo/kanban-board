@@ -1,4 +1,3 @@
-// src/components/Column.tsx
 import React, { useState } from "react";
 import TaskCard from "./Task";
 import type { Task } from "../types";
@@ -10,6 +9,7 @@ type ColumnProps = {
   onAddTask?: (title: string, description: string) => void;
   onEditTask?: (id: string, newTitle: string, newDesc: string) => void;
   onDeleteTask?: (id: string) => void;
+  onDeleteColumn?: (id: string) => void;
 };
 
 export default function Column({
@@ -18,7 +18,8 @@ export default function Column({
   tasks,
   onAddTask,
   onEditTask,
-  onDeleteTask
+  onDeleteTask,
+  onDeleteColumn
 }: ColumnProps) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -35,8 +36,19 @@ export default function Column({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow w-80 p-4">
-      <h2 className="font-bold text-lg mb-4 dark:text-white">{title}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow w-80 p-4 min-h-[200px] flex flex-col">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="font-bold text-lg dark:text-white">{title}</h2>
+        {onDeleteColumn && (
+          <button
+            className="text-red-600 hover:underline text-xs"
+            onClick={() => onDeleteColumn(id)}
+            title="Delete column"
+          >
+            Delete
+          </button>
+        )}
+      </div>
       {isTodoColumn && (
         <form onSubmit={handleAddTask} className="mb-4 space-y-2">
           <input
@@ -62,11 +74,12 @@ export default function Column({
           </button>
         </form>
       )}
-      <div className="space-y-2">
-        {tasks.map((task) => (
+      <div className="space-y-2 flex-1">
+        {tasks.map((task, idx) => (
           <TaskCard
             key={task.id}
             task={task}
+            index={idx}
             onEdit={onEditTask}
             onDelete={onDeleteTask}
           />
